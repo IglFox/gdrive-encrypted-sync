@@ -112,7 +112,22 @@ export class SyncEngine {
 				throw new Error('Шифрование не настроено');
 			}
 
-			// Убеждаемся, что папка синхронизации существует
+			// Убеждаемся, что папка синхронизации существует и не удалена
+			if (this.settings.driveSyncFolderId) {
+				try {
+					const meta = await this.drive.getFileMetadata(this.settings.driveSyncFolderId);
+					if (meta.trashed) {
+						logger.warn('Папка синхронизации на Drive перемещена в корзину. Сбрасываем ID...');
+						this.settings.driveSyncFolderId = '';
+						this.settings.driveManifestFileId = '';
+					}
+				} catch (err) {
+					logger.warn('Не удалось получить метаданные папки синхронизации (возможно, удалена). Сбрасываем ID...');
+					this.settings.driveSyncFolderId = '';
+					this.settings.driveManifestFileId = '';
+				}
+			}
+
 			if (!this.settings.driveSyncFolderId) {
 				this.settings.driveSyncFolderId = await this.drive.ensureSyncFolder();
 			}
