@@ -97,8 +97,15 @@ export default class GDriveSyncPlugin extends Plugin {
 			});
 		}
 
-		// Инициализируем шифрование (если пароль уже был установлен)
-		// Примечание: реальная инициализация ключа произойдёт при первой синхронизации
+		// Инициализируем шифрование (если сохранённый пароль и соль есть в настройках)
+		if (this.settings.encryptionPassword && this.settings.encryptionSalt) {
+			try {
+				await this.cryptoService.init(this.settings.encryptionPassword, this.settings.encryptionSalt);
+				logger.info('Криптографический ключ успешно восстановлен при запуске');
+			} catch (err) {
+				logger.error('Не удалось автоматически инициализировать шифрование при запуске:', err);
+			}
+		}
 
 		// Загружаем состояние синхронизации
 		await this.stateTracker.loadState();
@@ -240,6 +247,9 @@ export default class GDriveSyncPlugin extends Plugin {
 
 		const tokens = await this.oauthManager.authorize();
 		await this.saveTokens(tokens);
+
+		// Синхронизируем соль после подключения к Drive
+		await this.syncSaltWithDrive();
 	}
 
 	/**
@@ -248,6 +258,7 @@ export default class GDriveSyncPlugin extends Plugin {
 	disconnect(): void {
 		this.oauthManager.disconnect();
 		this.savedTokens = null;
+		this.settings.encryptionPassword = ''; // Сбрасываем сохраненный пароль при отключении
 		this.saveSettings();
 		this.updateStatusBar(SyncStatus.NotConfigured);
 	}
@@ -256,7 +267,28 @@ export default class GDriveSyncPlugin extends Plugin {
 	 * Настройка шифрования (вызывается из Settings).
 	 */
 	async setupEncryption(password: string): Promise<void> {
-		// Генерируем или используем существующую соль
+		// Если мы подключены к Google Drive, пробуем получить соль оттуда
+		if (this.isConnected()) {
+			try {
+				const folderId = this.settings.driveSyncFolderId || await this.driveClient.ensureSyncFolder();
+				this.settings.driveSyncFolderId = folderId;
+
+				const saltFile = await this.driveClient.findFileByName('.sync-salt', folderId);
+				if (saltFile) {
+					logger.info('Найдена соль шифрования на Google Drive, скачиваем...');
+					const saltBuffer = await this.driveClient.downloadFile(saltFile.id);
+					const saltText = new TextDecoder().decode(saltBuffer).trim();
+					if (saltText) {
+						this.settings.encryptionSalt = saltText;
+						logger.info('Соль успешно загружена с Google Drive');
+					}
+				}
+			} catch (err) {
+				logger.warn('Не удалось загрузить соль с Google Drive, будет сгенерирована новая:', err);
+			}
+		}
+
+		// Генерируем соль, если не получили с Drive и её нет локально
 		if (!this.settings.encryptionSalt) {
 			this.settings.encryptionSalt = this.cryptoService.generateSalt();
 		}
@@ -264,29 +296,102 @@ export default class GDriveSyncPlugin extends Plugin {
 		// Инициализируем крипто-сервис
 		await this.cryptoService.init(password, this.settings.encryptionSalt);
 
-		// Сохраняем хеш пароля для верификации
+		// Сохраняем хеш пароля для верификации и сам пароль для автозапуска
 		this.settings.passwordHash = await this.cryptoService.hashPassword(
 			password,
 			this.settings.encryptionSalt,
 		);
+		this.settings.encryptionPassword = password;
 
 		await this.saveSettings();
+
+		// Загружаем соль на Drive, если её там не было
+		if (this.isConnected()) {
+			try {
+				const folderId = this.settings.driveSyncFolderId;
+				const saltFile = await this.driveClient.findFileByName('.sync-salt', folderId);
+				if (!saltFile) {
+					logger.info('Загружаем соль шифрования на Google Drive...');
+					const encoder = new TextEncoder();
+					const saltData = encoder.encode(this.settings.encryptionSalt).buffer;
+					await this.driveClient.uploadFile('.sync-salt', saltData, folderId);
+				}
+			} catch (err) {
+				logger.error('Не удалось загрузить соль на Google Drive:', err);
+			}
+		}
+
 		logger.info('Шифрование настроено');
+	}
+
+	/**
+	 * Синхронизирует соль шифрования с Google Drive.
+	 */
+	async syncSaltWithDrive(): Promise<void> {
+		if (!this.isConnected()) return;
+
+		try {
+			const folderId = this.settings.driveSyncFolderId || await this.driveClient.ensureSyncFolder();
+			this.settings.driveSyncFolderId = folderId;
+
+			const saltFile = await this.driveClient.findFileByName('.sync-salt', folderId);
+			if (saltFile) {
+				const saltBuffer = await this.driveClient.downloadFile(saltFile.id);
+				const saltText = new TextDecoder().decode(saltBuffer).trim();
+
+				if (saltText && saltText !== this.settings.encryptionSalt) {
+					logger.info('Обнаружено расхождение соли с Google Drive. Обновляем локальную соль...');
+					this.settings.encryptionSalt = saltText;
+
+					if (this.settings.encryptionPassword) {
+						await this.cryptoService.init(this.settings.encryptionPassword, saltText);
+						this.settings.passwordHash = await this.cryptoService.hashPassword(
+							this.settings.encryptionPassword,
+							saltText,
+						);
+					} else {
+						this.cryptoService.destroy();
+					}
+					await this.saveSettings();
+				}
+			} else if (this.settings.encryptionSalt) {
+				logger.info('Загружаем локальную соль шифрования на Google Drive...');
+				const encoder = new TextEncoder();
+				const saltData = encoder.encode(this.settings.encryptionSalt).buffer;
+				await this.driveClient.uploadFile('.sync-salt', saltData, folderId);
+			}
+		} catch (err) {
+			logger.error('Ошибка синхронизации соли шифрования с Google Drive:', err);
+		}
 	}
 
 	/**
 	 * Синхронизировать сейчас.
 	 */
 	async syncNow(): Promise<void> {
+		if (!this.isConnected()) {
+			new Notice('Подключите Google Drive в настройках');
+			return;
+		}
+
+		// Синхронизируем соль с облака перед запуском
+		await this.syncSaltWithDrive();
+
 		if (!this.isReady()) {
 			new Notice('Настройте подключение и пароль шифрования');
 			return;
 		}
 
-		// Инициализируем шифрование если ещё не сделано
+		// Инициализируем шифрование, если пароль сохранен, но ключ не был создан
+		if (!this.cryptoService.isInitialized && this.settings.encryptionPassword && this.settings.encryptionSalt) {
+			try {
+				await this.cryptoService.init(this.settings.encryptionPassword, this.settings.encryptionSalt);
+			} catch (err) {
+				logger.error('Ошибка инициализации шифрования в syncNow:', err);
+			}
+		}
+
 		if (!this.cryptoService.isInitialized) {
-			// В текущей версии пароль не кешируется между сессиями.
-			// Пользователю нужно ввести его при первой синхронизации после запуска.
 			new Notice('Введите пароль шифрования для начала синхронизации');
 			return;
 		}

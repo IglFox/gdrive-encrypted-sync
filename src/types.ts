@@ -42,6 +42,8 @@ export interface PluginSettings {
 	driveManifestFileId: string;
 	/** Включить защиту от массового удаления (>50% файлов) */
 	enableDeletionGuard: boolean;
+	/** Сохраненный пароль шифрования (хранится локально в vault) */
+	encryptionPassword?: string;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -57,6 +59,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	driveSyncFolderId: '',
 	driveManifestFileId: '',
 	enableDeletionGuard: true,
+	encryptionPassword: '',
 };
 
 // ============================================================
