@@ -209,6 +209,18 @@ export class GDriveSyncSettingTab extends PluginSettingTab {
 					}),
 			);
 
+		new Setting(containerEl)
+			.setName('Защита от массового удаления')
+			.setDesc('Останавливать синхронизацию, если планируется удалить более 50% файлов в хранилище или на Google Drive')
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.enableDeletionGuard)
+					.onChange(async (value) => {
+						this.plugin.settings.enableDeletionGuard = value;
+						await this.plugin.saveSettings();
+					}),
+			);
+
 		// ============================================================
 		// Исключения
 		// ============================================================

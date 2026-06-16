@@ -40,6 +40,8 @@ export interface PluginSettings {
 	driveSyncFolderId: string;
 	/** ID файла манифеста на Google Drive */
 	driveManifestFileId: string;
+	/** Включить защиту от массового удаления (>50% файлов) */
+	enableDeletionGuard: boolean;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -54,6 +56,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	showNotifications: true,
 	driveSyncFolderId: '',
 	driveManifestFileId: '',
+	enableDeletionGuard: true,
 };
 
 // ============================================================

@@ -149,11 +149,11 @@ export class SyncEngine {
 			).length;
 
 			const checkMassDeletion = (count: number, direction: string) => {
-				if (count > 5 && totalSyncedFiles > 0 && count / totalSyncedFiles > 0.5) {
+				if (this.settings.enableDeletionGuard && count > 5 && totalSyncedFiles > 0 && count / totalSyncedFiles > 0.5) {
 					const msg =
 						`⛔ Синхронизация остановлена: план предполагает удаление ${count} из ${totalSyncedFiles} ` +
 						`файлов ${direction} (>50%). Это может быть ошибкой. ` +
-						`Если вы действительно удалили эти файлы, выполните «Полная пересинхронизация» в настройках плагина.`;
+						`Если вы действительно удалили эти файлы, отключите «Защиту от массового удаления» в настройках плагина.`;
 					logger.error(msg);
 					throw new Error(msg);
 				}
