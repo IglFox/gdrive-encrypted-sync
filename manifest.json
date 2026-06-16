@@ -1,0 +1,9 @@
+{
+	"id": "gdrive-encrypted-sync",
+	"name": "Google Drive Encrypted Sync",
+	"version": "1.0.0",
+	"minAppVersion": "1.0.0",
+	"description": "Двусторонняя синхронизация хранилища через Google Drive с end-to-end шифрованием (AES-256-GCM)",
+	"author": "antma",
+	"isDesktopOnly": true
+}
