@@ -6,7 +6,7 @@
  */
 
 import { App, TFile, TFolder, Vault } from 'obsidian';
-import { SyncState, FileState, EMPTY_SYNC_STATE } from './types';
+import { SyncState, FileState, getEmptySyncState } from './types';
 import { CryptoService } from './crypto';
 import { logger } from './logger';
 import { normalizePath, matchesExcludePattern } from './utils';
@@ -42,7 +42,7 @@ export class StateTracker {
 		this.crypto = crypto;
 		this.pluginDir = pluginDir;
 		this.excludePatterns = excludePatterns;
-		this.state = { ...EMPTY_SYNC_STATE };
+		this.state = getEmptySyncState();
 	}
 
 	/**
@@ -79,12 +79,12 @@ export class StateTracker {
 				this.state = JSON.parse(content) as SyncState;
 				logger.info(`Состояние загружено: ${Object.keys(this.state.files).length} файлов`);
 			} else {
-				this.state = { ...EMPTY_SYNC_STATE };
+				this.state = getEmptySyncState();
 				logger.info('Файл состояния не найден, начинаем с чистого состояния');
 			}
 		} catch (err) {
 			logger.error('Ошибка загрузки состояния синхронизации:', err);
-			this.state = { ...EMPTY_SYNC_STATE };
+			this.state = getEmptySyncState();
 		}
 	}
 

@@ -14,7 +14,7 @@ import {
 	OAuthTokens,
 	SyncStatus,
 	SyncResult,
-	EMPTY_SYNC_STATE,
+	getEmptySyncState,
 } from './types';
 import { CryptoService } from './crypto';
 import { OAuthManager } from './oauth';
@@ -299,7 +299,7 @@ export default class GDriveSyncPlugin extends Plugin {
 	 */
 	async fullResync(): Promise<void> {
 		logger.info('Запуск полной пересинхронизации...');
-		this.stateTracker.setState({ ...EMPTY_SYNC_STATE });
+		this.stateTracker.setState(getEmptySyncState());
 		await this.stateTracker.saveState();
 		await this.syncNow();
 	}

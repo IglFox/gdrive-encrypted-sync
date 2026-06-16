@@ -154,11 +154,11 @@ export interface SyncState {
 	lastFullSync: string;
 }
 
-export const EMPTY_SYNC_STATE: SyncState = {
+export const getEmptySyncState = (): SyncState => ({
 	version: 1,
 	files: {},
 	lastFullSync: '',
-};
+});
 
 // ============================================================
 // Манифест (хранится на Drive)
