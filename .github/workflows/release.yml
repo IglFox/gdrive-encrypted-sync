@@ -1,0 +1,41 @@
+name: Release Obsidian Plugin
+
+on:
+  push:
+    tags:
+      - '*' # Запуск при пуше любого тега (например, 1.0.1)
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write # Требуется для создания релиза и загрузки ассетов
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Create Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            main.js
+            manifest.json
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
