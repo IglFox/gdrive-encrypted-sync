@@ -66,4 +66,4 @@
 ---
 
 ## 📜 Лицензия
-MIT License. См. файл [LICENSE](LICENSE) для подробностей (если применимо).
+MIT License. См. файл [LICENSE](LICENSE) для подробностей.
